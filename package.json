@@ -1,0 +1,16 @@
+{
+  "name": "encarregado-de-obras",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Foto do problema: diagnóstico, compras, conserto. App web instalável (PWA).",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  }
+}

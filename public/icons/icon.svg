@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><pattern id="z" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="28" height="56" fill="#EFB321"/><rect x="28" width="28" height="56" fill="#1B201D"/></pattern></defs>
+  <rect width="512" height="512" fill="#1B201D"/>
+  <rect y="380" width="512" height="56" fill="url(#z)"/>
+  <path d="M120 300 a136 136 0 0 1 272 0 z" fill="#D9480F"/>
+  <rect x="96" y="296" width="320" height="34" rx="10" fill="#D9480F"/>
+  <rect x="240" y="150" width="32" height="150" rx="10" fill="#1B201D" opacity=".35"/>
+</svg>
