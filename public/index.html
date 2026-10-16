@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Encarregado de Obras</title>
+  <meta name="description" content="Foto do problema: diagnóstico, compras e conserto passo a passo.">
+  <meta name="theme-color" content="#1B201D">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Encarregado">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><h1>Encarregado<br>de Obras</h1></div>
+  </header>
+  <div class="hazard" aria-hidden="true"></div>
+
+  <div class="cases">
+    <select id="caseList" aria-label="Caso"></select>
+    <button class="btn ghost" id="caseNew" type="button">Novo</button>
+    <button class="btn ghost" id="caseDel" type="button">Apagar</button>
+  </div>
+
+  <section class="case" aria-label="Ficha do caso">
+    <label class="field"><span class="lbl">O que está quebrado</span>
+      <textarea id="caseWhat"></textarea></label>
+    <div class="row2">
+      <label class="field"><span class="lbl">Cômodo</span>
+        <select id="caseRoom">
+          <option>Cozinha</option><option>Banheiro</option><option>Área de serviço</option><option>Sala</option><option>Quarto</option><option>Varanda</option><option>Área externa</option><option>Garagem</option>
+        </select></label>
+      <label class="field"><span class="lbl">Cidade</span>
+        <input id="caseArea" autocomplete="address-level2"></label>
+    </div>
+    <label class="photo">
+      <input type="file" id="photoBefore" accept="image/*" capture="environment">
+      <span class="thumb" id="pbThumb" aria-hidden="true">📷</span>
+      <span><b>Foto do problema</b><small id="pbHint">Tirar ou escolher</small></span>
+    </label>
+  </section>
+
+  <nav class="tabs" role="tablist" id="tabs" aria-label="Ferramentas"></nav>
+  <main id="panels"></main>
+
+  <p class="foot">Orientação geral, não substitui um profissional. Gás, quadro de energia e estrutura: chame um técnico.</p>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
