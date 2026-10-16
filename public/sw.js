@@ -1,5 +1,5 @@
 // Guarda o app no aparelho para abrir sem internet. As consultas ao Claude sempre vão para a rede.
-const CACHE = "encarregado-v1";
+const CACHE = "encarregado-v2";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "db.js", "prompts.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

@@ -29,25 +29,52 @@ const status = {}; // chave da ferramenta → { msg, err, busy }
 const save = (c = C) => { c.updatedAt = Date.now(); return putCase(c).catch((e) => console.error(e)); };
 
 // ---------- Fotos ----------
-// Reduz a foto para no máximo 1280 px antes de guardar e enviar.
-async function prepPhoto(file) {
-  try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
-    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    return await new Promise((r) => canvas.toBlob((b) => r(b || file), "image/jpeg", 0.82));
-  } catch { return file; }
+// A foto é reduzida para no máximo 1280 px e guardada como JPEG em texto (data URL).
+// Guardar como texto evita fotos que somem do IndexedDB no Safari do iPhone.
+function decode(file) {
+  return createImageBitmap(file).catch(() => new Promise((resolve, reject) => {
+    // Plano B: o <img> lê formatos que o createImageBitmap recusa (ex.: HEIC no iPhone).
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode")); };
+    img.src = url;
+  }));
 }
-const urls = new WeakMap();
-const photoURL = (blob) => { if (!urls.has(blob)) urls.set(blob, URL.createObjectURL(blob)); return urls.get(blob); };
-const toImage = (blob) => new Promise((resolve, reject) => {
+async function prepPhoto(file) {
+  const pic = await decode(file);
+  const w = pic.naturalWidth || pic.width, hgt = pic.naturalHeight || pic.height;
+  const scale = Math.min(1, 1280 / Math.max(w, hgt));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w * scale); canvas.height = Math.round(hgt * scale);
+  canvas.getContext("2d").drawImage(pic, 0, 0, canvas.width, canvas.height);
+  const data = canvas.toDataURL("image/jpeg", 0.82);
+  if (!data.startsWith("data:image/jpeg")) throw new Error("encode");
+  return data;
+}
+const blobToDataURL = (blob) => new Promise((resolve, reject) => {
   const r = new FileReader();
-  r.onload = () => resolve({ media_type: blob.type || "image/jpeg", data: String(r.result).split(",")[1] });
+  r.onload = () => resolve(String(r.result));
   r.onerror = () => reject(r.error);
   r.readAsDataURL(blob);
 });
+// Casos salvos pela primeira versão guardavam a foto como Blob.
+async function migratePhotos(c) {
+  let changed = false;
+  for (const k of ["photoBefore", "photoAfter"]) {
+    if (c[k] && typeof c[k] !== "string") {
+      try { c[k] = await prepPhoto(c[k]); } catch { c[k] = null; }
+      changed = true;
+    }
+  }
+  if (changed) await putCase(c).catch(() => {});
+}
+const photoURL = (photo) => photo;
+const toImage = (dataURL) => {
+  const [head, data] = dataURL.split(",");
+  return { media_type: head.slice(5, head.indexOf(";")), data };
+};
+const PHOTO_ERR = "Não consegui ler essa foto. Tente outra, ou tire a foto pela câmera do app.";
 
 // ---------- Claude (via servidor do app) ----------
 const ERRORS = {
@@ -59,12 +86,13 @@ const ERRORS = {
   invalid_json: "A resposta veio fora do formato. Toque de novo para repetir.",
   empty_completion: "Resposta vazia. Simplifique a descrição e tente de novo.",
   offline: "Sem internet. Tente de novo quando conectar.",
+  too_large: "A foto ficou grande demais para enviar. Tente outra.",
 };
 const errText = (e) => ERRORS[e?.code] || e?.message || "Falha de conexão. Tente de novo.";
 
 async function callClaude({ system, messages, images, quick }, retry = true) {
   if (!navigator.onLine) throw { code: "offline" };
-  const body = { system, messages, quick, images: images?.length ? await Promise.all(images.map(toImage)) : undefined };
+  const body = { system, messages, quick, images: images?.length ? images.map(toImage) : undefined };
   let res;
   try {
     res = await fetch("api/claude", {
@@ -78,6 +106,7 @@ async function callClaude({ system, messages, images, quick }, retry = true) {
     const code = window.prompt("Código de acesso do app:");
     if (code) { pref.set("code", code.trim()); return callClaude({ system, messages, images, quick }, false); }
   }
+  if (res.status === 413) throw { code: "too_large" };
   if (!res.ok) throw data.error || { message: "Erro " + res.status };
   return data.text;
 }
@@ -99,7 +128,7 @@ async function runJSON(key, imgs) {
   const c = C;
   setStatus(key, imgs?.length ? "Analisando a foto…" : "Pensando…", false, true);
   try {
-    c[key] = parseJSON(await callClaude({ messages: [{ role: "user", content: PROMPTS[key](c, !!imgs?.length) }] }));
+    c[key] = parseJSON(await callClaude({ messages: [{ role: "user", content: PROMPTS[key](c, !!imgs?.length) }], images: imgs }));
     await save(c);
     setStatus(key, "");
   } catch (e) { setStatus(key, errText(e), true); }
@@ -134,6 +163,7 @@ const GAUGE = [["10min", "10 min"], ["fim_de_semana", "Fim de semana"], ["profis
 function panelDiag() {
   const out = [
     h("h2", {}, "Diagnóstico"),
+    C.photoBefore ? null : h("p", { class: "notice" }, "Sem foto: a análise usa só a descrição. Adicione a foto na ficha acima."),
     h("button", { class: "btn", disabled: isBusy("diag"), onclick: () => runJSON("diag", before()) }, C.diag ? "Diagnosticar de novo" : "Diagnosticar"),
     statusEl("diag"),
   ];
@@ -209,7 +239,10 @@ async function stepSend(text) {
 
 function photoPicker(label, file, onPick) {
   return h("label", { class: "photo" },
-    h("input", { type: "file", accept: "image/*", capture: "environment", onchange: async (e) => { const f = e.target.files?.[0]; if (f) { onPick(await prepPhoto(f)); render(); } } }),
+    h("input", { type: "file", accept: "image/*", capture: "environment", onchange: async (e) => {
+      const f = e.target.files?.[0]; if (!f) return;
+      try { onPick(await prepPhoto(f)); setStatus("after", ""); } catch { setStatus("after", PHOTO_ERR, true); }
+    } }),
     h("span", { class: "thumb", "aria-hidden": "true" }, file ? h("img", { src: photoURL(file), alt: "" }) : "📷"),
     h("span", {}, h("b", {}, label), h("small", {}, file ? "Toque para trocar" : "Tirar ou escolher")));
 }
@@ -366,7 +399,9 @@ $("#caseArea").addEventListener("input", (e) => { C.area = e.target.value; save(
 $("#caseRoom").addEventListener("change", (e) => { C.room = e.target.value; save(); render(); });
 $("#photoBefore").addEventListener("change", async (e) => {
   const f = e.target.files?.[0]; if (!f) return;
-  C.photoBefore = await prepPhoto(f); save(); renderCase();
+  try { C.photoBefore = await prepPhoto(f); save(); $("#pbHint").textContent = "Toque para trocar"; }
+  catch { $("#pbHint").textContent = PHOTO_ERR; return; }
+  renderCase();
 });
 $("#caseList").addEventListener("change", (e) => selectCase(cases.find((c) => c.id === e.target.value)));
 $("#caseNew").addEventListener("click", createCase);
@@ -379,6 +414,7 @@ $("#caseDel").addEventListener("click", async () => {
 
 // ---------- Início ----------
 cases = await allCases().catch(() => []);
+await Promise.all(cases.map(migratePhotos));
 const last = cases.find((c) => c.id === pref.get("case")) || cases.sort((a, b) => b.updatedAt - a.updatedAt)[0];
 if (last) selectCase(last); else await createCase();
 
